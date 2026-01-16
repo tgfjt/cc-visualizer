@@ -1,4 +1,5 @@
 import { tailFile } from "./tail.ts";
+import { processEvent, getSnapshot, type AgentEvent } from "./state.ts";
 
 const LOG_FILE = `${Deno.env.get("HOME")}/.cc-visualizer/events.ndjson`;
 const PORT = 8181;
@@ -11,6 +12,14 @@ async function startTailing() {
   console.log(`Tailing ${LOG_FILE}...`);
 
   for await (const line of tailFile(LOG_FILE)) {
+    // イベントをパースして状態を更新
+    try {
+      const event = JSON.parse(line) as AgentEvent;
+      processEvent(event);
+    } catch {
+      // パース失敗は無視
+    }
+
     // 全クライアントに配信
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
@@ -31,6 +40,8 @@ async function handleRequest(req: Request): Promise<Response> {
     socket.onopen = () => {
       clients.add(socket);
       console.log(`Client connected. Total: ${clients.size}`);
+      // 現在の状態を送信
+      socket.send(JSON.stringify({ type: "snapshot", ...getSnapshot() }));
     };
 
     socket.onclose = () => {

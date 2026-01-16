@@ -12,11 +12,17 @@
       color: #e0e0e0;
       margin: 0;
       padding: 20px;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
     }
     h1 {
       color: #7c3aed;
       font-size: 1.2em;
-      margin-bottom: 20px;
+      margin: 0;
     }
     .status {
       display: inline-block;
@@ -27,7 +33,72 @@
     }
     .status.connected { background: #22c55e; color: #000; }
     .status.disconnected { background: #ef4444; color: #fff; }
-    #events {
+
+    .container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+    }
+
+    /* エージェント一覧 */
+    .agents {
+      background: #111;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .agents h2 {
+      font-size: 0.9em;
+      color: #888;
+      margin: 0 0 12px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .agent {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #444;
+      transition: all 0.3s ease;
+    }
+    .agent.active {
+      border-color: #22c55e;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
+    }
+    .agent.inactive {
+      opacity: 0.5;
+    }
+    .agent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .agent-id {
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+    .agent-type {
+      font-size: 0.75em;
+      background: #333;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #aaa;
+    }
+    .agent-tool {
+      font-size: 0.8em;
+      color: #3b82f6;
+      margin-top: 4px;
+    }
+    .no-agents {
+      color: #555;
+      font-size: 0.85em;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* イベントフィード */
+    .events {
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -44,6 +115,7 @@
     .event.PreToolUse { border-color: #3b82f6; }
     .event.PostToolUse { border-color: #8b5cf6; }
     .event.SessionStart { border-color: #f59e0b; }
+    .event.SessionEnd { border-color: #6b7280; }
     .event-header {
       display: flex;
       gap: 12px;
@@ -58,6 +130,13 @@
       color: #666;
       font-size: 0.8em;
     }
+    .event-agent {
+      font-size: 0.75em;
+      background: #333;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #aaa;
+    }
     .event-detail {
       color: #888;
       font-size: 0.85em;
@@ -69,13 +148,29 @@
   </style>
 </head>
 <body>
-  <h1>CC Visualizer <span id="status" class="status disconnected">disconnected</span></h1>
-  <div id="events"></div>
+  <header>
+    <h1>CC Visualizer</h1>
+    <span id="status" class="status disconnected">disconnected</span>
+  </header>
+
+  <div class="container">
+    <div class="agents">
+      <h2>Agents</h2>
+      <div id="agents-list">
+        <div class="no-agents">No active agents</div>
+      </div>
+    </div>
+    <div id="events" class="events"></div>
+  </div>
 
   <script>
     const eventsEl = document.getElementById('events');
+    const agentsEl = document.getElementById('agents-list');
     const statusEl = document.getElementById('status');
     const MAX_EVENTS = 50;
+
+    // エージェント状態
+    const agents = new Map();
 
     function connect() {
       const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -93,24 +188,114 @@
 
       ws.onmessage = (e) => {
         try {
-          const event = JSON.parse(e.data);
-          addEvent(event);
+          const data = JSON.parse(e.data);
+
+          // スナップショット（初期状態）
+          if (data.type === 'snapshot') {
+            agents.clear();
+            for (const agent of data.agents) {
+              agents.set(agent.id, agent);
+            }
+            renderAgents();
+            return;
+          }
+
+          // 通常イベント
+          handleEvent(data);
+          addEventToFeed(data);
         } catch (err) {
           console.error('Parse error:', err);
         }
       };
     }
 
-    function addEvent(event) {
+    function handleEvent(event) {
+      switch (event.hook_event_name) {
+        case 'SubagentStart':
+          if (event.agent_id) {
+            agents.set(event.agent_id, {
+              id: event.agent_id,
+              type: event.agent_type || 'unknown',
+              status: 'active',
+              currentTool: null,
+            });
+          }
+          break;
+
+        case 'SubagentStop':
+          if (event.agent_id) {
+            const agent = agents.get(event.agent_id);
+            if (agent) {
+              agent.status = 'inactive';
+              agent.currentTool = null;
+            }
+          }
+          break;
+
+        case 'PreToolUse':
+          const preId = event.agent_id || `main-${event.session_id}`;
+          let preAgent = agents.get(preId);
+          if (!preAgent) {
+            preAgent = { id: preId, type: 'main', status: 'active' };
+            agents.set(preId, preAgent);
+          }
+          preAgent.currentTool = event.tool_name;
+          preAgent.status = 'active';
+          break;
+
+        case 'PostToolUse':
+          const postId = event.agent_id || `main-${event.session_id}`;
+          const postAgent = agents.get(postId);
+          if (postAgent) {
+            postAgent.currentTool = null;
+          }
+          break;
+
+        case 'SessionEnd':
+          for (const agent of agents.values()) {
+            if (agent.sessionId === event.session_id || !agent.sessionId) {
+              agent.status = 'inactive';
+              agent.currentTool = null;
+            }
+          }
+          break;
+      }
+      renderAgents();
+    }
+
+    function renderAgents() {
+      const activeAgents = Array.from(agents.values()).filter(a => a.status === 'active');
+      const inactiveAgents = Array.from(agents.values()).filter(a => a.status === 'inactive');
+      const all = [...activeAgents, ...inactiveAgents];
+
+      if (all.length === 0) {
+        agentsEl.innerHTML = '<div class="no-agents">No active agents</div>';
+        return;
+      }
+
+      agentsEl.innerHTML = all.map(agent => `
+        <div class="agent ${agent.status}">
+          <div class="agent-header">
+            <span class="agent-id">${agent.id.slice(0, 7)}</span>
+            <span class="agent-type">${agent.type}</span>
+          </div>
+          ${agent.currentTool ? `<div class="agent-tool">${agent.currentTool}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function addEventToFeed(event) {
       const el = document.createElement('div');
       el.className = `event ${event.hook_event_name}`;
 
       const time = new Date(event.logged_at).toLocaleTimeString();
       const detail = formatDetail(event);
+      const agentId = event.agent_id ? event.agent_id.slice(0, 7) : '';
 
       el.innerHTML = `
         <div class="event-header">
           <span class="event-type">${event.hook_event_name}</span>
+          ${agentId ? `<span class="event-agent">${agentId}</span>` : ''}
           <span class="event-time">${time}</span>
         </div>
         <div class="event-detail">${detail}</div>
@@ -118,7 +303,6 @@
 
       eventsEl.insertBefore(el, eventsEl.firstChild);
 
-      // 古いイベントを削除
       while (eventsEl.children.length > MAX_EVENTS) {
         eventsEl.removeChild(eventsEl.lastChild);
       }
@@ -127,9 +311,9 @@
     function formatDetail(event) {
       switch (event.hook_event_name) {
         case 'SubagentStart':
-          return `Agent: ${event.agent_id} (${event.agent_type})`;
+          return `Started (${event.agent_type})`;
         case 'SubagentStop':
-          return `Agent: ${event.agent_id}`;
+          return 'Stopped';
         case 'PreToolUse':
         case 'PostToolUse':
           const desc = event.tool_input?.description || '';
@@ -139,7 +323,7 @@
         case 'SessionEnd':
           return `Reason: ${event.reason}`;
         default:
-          return JSON.stringify(event).slice(0, 100);
+          return '';
       }
     }
 
