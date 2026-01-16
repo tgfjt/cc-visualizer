@@ -82,5 +82,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "commit-commands@claude-code-plugins": true
   }
 }

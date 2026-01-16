@@ -258,6 +258,10 @@
     .subagent-badge.Explore { background: #8b5cf6; }
     .subagent-badge.Plan { background: #f59e0b; color: #000; }
     .subagent-badge.Bash { background: #3b82f6; }
+    .subagent-badge.inactive {
+      opacity: 0.6;
+      border: 1px dashed #666;
+    }
     .timeline-svg {
       flex: 1;
       min-width: 600px;
@@ -364,9 +368,10 @@
           if (data.sessions) {
             sessions.clear();
             for (const session of data.sessions) {
-              // eventHistoryを初期化
+              // 配列を初期化
               session.eventHistory = session.eventHistory || [];
               session.speechHistory = session.speechHistory || [];
+              session.subAgents = session.subAgents || [];
               session.startTime = session.startTime || Date.now();
               sessions.set(session.id, session);
             }
@@ -582,7 +587,11 @@
           events.forEach(e => {
             if (e.agentId) {
               if (!subAgentEvents[e.agentId]) {
-                subAgentEvents[e.agentId] = { type: e.agentType, events: [] };
+                subAgentEvents[e.agentId] = { type: e.agentType || 'unknown', events: [] };
+              }
+              // SubagentStartでtypeを更新（より正確な情報）
+              if (e.type === 'SubagentStart' && e.agentType) {
+                subAgentEvents[e.agentId].type = e.agentType;
               }
               subAgentEvents[e.agentId].events.push(e);
             }
@@ -645,8 +654,12 @@
             subIndex++;
           });
 
-          // アクティブなサブエージェント
-          const activeSubAgents = (session.subAgents || []).filter(s => s.status === 'active');
+          // サブエージェント（activeを先に、inactiveを後に）
+          const allSubAgents = (session.subAgents || []);
+          const sortedSubAgents = [
+            ...allSubAgents.filter(s => s.status === 'active'),
+            ...allSubAgents.filter(s => s.status !== 'active')
+          ];
 
           // 最近更新があったかどうか（1分以内）
           const isRecent = session.lastSeen > Date.now() - 60 * 1000;
@@ -659,9 +672,9 @@
                 ${session.title ? `<div class="title">${session.title}</div>` : ''}
                 ${speech ? `<div class="speech">"${speech.slice(0, 40)}..."</div>` : ''}
                 ${session.currentAction ? `<div class="current-action">→ ${session.currentAction}</div>` : ''}
-                ${activeSubAgents.length > 0 ? `
+                ${sortedSubAgents.length > 0 ? `
                   <div class="active-subagents">
-                    ${activeSubAgents.map(s => `<span class="subagent-badge ${s.type}">${s.type}</span>`).join('')}
+                    ${sortedSubAgents.map(s => `<span class="subagent-badge ${s.type}${s.status !== 'active' ? ' inactive' : ''}">${s.type}</span>`).join('')}
                   </div>
                 ` : ''}
               </div>
