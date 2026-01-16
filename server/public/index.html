@@ -78,27 +78,49 @@
       padding-left: 12px;
       border-left: 2px solid #333;
     }
+    .speech-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
     .session-speech {
       background: #1a1a2e;
       color: #e0e0e0;
       font-size: 0.95em;
       padding: 10px 14px;
       border-radius: 12px;
-      margin-bottom: 12px;
       position: relative;
       border: 1px solid #2a2a4e;
+      animation: speechFadeIn 0.3s ease-out;
+      transition: opacity 0.5s ease, transform 0.3s ease;
+    }
+    .session-speech.older {
+      font-size: 0.85em;
+      padding: 6px 10px;
+      background: #151525;
     }
     .session-speech::before {
       content: '"';
-      font-size: 1.5em;
+      font-size: 1.2em;
       color: #7c3aed;
       margin-right: 4px;
     }
     .session-speech::after {
       content: '"';
-      font-size: 1.5em;
+      font-size: 1.2em;
       color: #7c3aed;
       margin-left: 4px;
+    }
+    @keyframes speechFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     /* サブエージェント */
@@ -257,8 +279,21 @@
           if (data.type === 'speech_update') {
             const session = sessions.get(data.sessionId);
             if (session) {
-              session.speech = data.speech;
-              session.speechTime = Date.now();
+              // 履歴に追加（同じ内容は追加しない）
+              if (!session.speechHistory) {
+                session.speechHistory = [];
+              }
+              const lastSpeech = session.speechHistory[0];
+              if (!lastSpeech || lastSpeech.text !== data.speech) {
+                session.speechHistory.unshift({
+                  text: data.speech,
+                  time: Date.now()
+                });
+                // 最大3件保持
+                if (session.speechHistory.length > 3) {
+                  session.speechHistory.pop();
+                }
+              }
               session.lastSeen = Date.now();
               renderSessions();
             }
@@ -414,7 +449,15 @@
               <span class="session-id">${shortId}</span>
             </div>
             ${session.title ? `<div class="session-title">${session.title}</div>` : ''}
-            ${session.speech ? `<div class="session-speech" style="opacity: ${getActionOpacity(session.speechTime)}">${session.speech}</div>` : ''}
+            ${session.speechHistory && session.speechHistory.length > 0 ? `
+              <div class="speech-container">
+                ${session.speechHistory.map((s, i) => {
+                  const opacity = getActionOpacity(s.time);
+                  const isOlder = i > 0;
+                  return `<div class="session-speech${isOlder ? ' older' : ''}" style="opacity: ${opacity}">${s.text}</div>`;
+                }).join('')}
+              </div>
+            ` : ''}
             ${session.currentAction ? `<div class="session-action" style="opacity: ${getActionOpacity(session.actionTime)}">${session.currentAction}</div>` : ''}
             ${allSubAgents.length > 0 ? `
               <div class="subagents">
