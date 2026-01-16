@@ -7,7 +7,7 @@
   <style>
     * { box-sizing: border-box; }
     body {
-      font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #0a0a0a;
       color: #e0e0e0;
       margin: 0;
@@ -17,7 +17,7 @@
     header {
       display: flex;
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
     h1 {
       color: #7c3aed;
@@ -28,122 +28,165 @@
       display: inline-block;
       padding: 4px 8px;
       border-radius: 4px;
-      font-size: 0.8em;
-      margin-left: 10px;
+      font-size: 0.75em;
+      margin-left: 12px;
     }
     .status.connected { background: #22c55e; color: #000; }
     .status.disconnected { background: #ef4444; color: #fff; }
 
-    .container {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 20px;
+    /* セッション */
+    .sessions {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 800px;
     }
-
-    /* エージェント一覧 */
-    .agents {
+    .session {
       background: #111;
       border-radius: 12px;
       padding: 16px;
+      border-left: 4px solid #7c3aed;
     }
-    .agents h2 {
+    .session-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .session-project {
+      font-size: 1.1em;
+      font-weight: 600;
+      color: #fff;
+    }
+    .session-id {
+      font-size: 0.75em;
+      color: #555;
+      font-family: monospace;
+    }
+    .session-title {
       font-size: 0.9em;
+      color: #bbb;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .session-action {
       color: #888;
+      font-size: 0.9em;
+      margin-bottom: 12px;
+      padding-left: 12px;
+      border-left: 2px solid #333;
+    }
+    .session-speech {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-size: 0.95em;
+      padding: 10px 14px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      position: relative;
+      border: 1px solid #2a2a4e;
+    }
+    .session-speech::before {
+      content: '"';
+      font-size: 1.5em;
+      color: #7c3aed;
+      margin-right: 4px;
+    }
+    .session-speech::after {
+      content: '"';
+      font-size: 1.5em;
+      color: #7c3aed;
+      margin-left: 4px;
+    }
+
+    /* サブエージェント */
+    .subagents {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-left: 12px;
+    }
+    .subagent {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #1a1a1a;
+      border-radius: 6px;
+    }
+    .subagent.inactive {
+      opacity: 0.4;
+    }
+    .subagent-type {
+      font-size: 0.8em;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      min-width: 60px;
+      text-align: center;
+    }
+    .subagent-type.Explore { background: #8b5cf6; color: #fff; }
+    .subagent-type.Plan { background: #f59e0b; color: #000; }
+    .subagent-type.Bash { background: #3b82f6; color: #fff; }
+    .subagent-type.unknown { background: #666; color: #fff; }
+    .subagent-action {
+      color: #aaa;
+      font-size: 0.85em;
+      flex: 1;
+    }
+    .subagent-speech {
+      background: #1a2a1a;
+      color: #c0e0c0;
+      font-size: 0.9em;
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-top: 6px;
+      border: 1px solid #2a4a2a;
+    }
+    .subagent-speech::before {
+      content: '💭 ';
+      font-size: 0.9em;
+    }
+    .subagent-status {
+      font-size: 0.7em;
+      color: #666;
+    }
+
+    .no-sessions {
+      color: #555;
+      font-size: 0.9em;
+      text-align: center;
+      padding: 40px;
+    }
+
+    /* イベントログ（小さく下に） */
+    .event-log {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #222;
+    }
+    .event-log h2 {
+      font-size: 0.8em;
+      color: #555;
       margin: 0 0 12px 0;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .agent {
-      background: #1a1a1a;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 8px;
-      border-left: 3px solid #444;
-      transition: all 0.3s ease;
-    }
-    .agent.active {
-      border-color: #22c55e;
-      box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
-    }
-    .agent.inactive {
-      opacity: 0.5;
-    }
-    .agent-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-    .agent-id {
-      font-weight: bold;
-      font-size: 0.9em;
-    }
-    .agent-type {
-      font-size: 0.75em;
-      background: #333;
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: #aaa;
-    }
-    .agent-tool {
-      font-size: 0.8em;
-      color: #3b82f6;
-      margin-top: 4px;
-    }
-    .no-agents {
-      color: #555;
-      font-size: 0.85em;
-      text-align: center;
-      padding: 20px;
-    }
-
-    /* イベントフィード */
     .events {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 4px;
+      font-size: 0.8em;
+      color: #666;
+      max-height: 200px;
+      overflow-y: auto;
     }
     .event {
-      background: #1a1a1a;
-      border-left: 3px solid #7c3aed;
-      padding: 12px;
-      border-radius: 0 8px 8px 0;
-      animation: slideIn 0.3s ease;
-    }
-    .event.SubagentStart { border-color: #22c55e; }
-    .event.SubagentStop { border-color: #ef4444; }
-    .event.PreToolUse { border-color: #3b82f6; }
-    .event.PostToolUse { border-color: #8b5cf6; }
-    .event.SessionStart { border-color: #f59e0b; }
-    .event.SessionEnd { border-color: #6b7280; }
-    .event-header {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .event-type {
-      font-weight: bold;
-      font-size: 0.9em;
-    }
-    .event-time {
-      color: #666;
-      font-size: 0.8em;
-    }
-    .event-agent {
-      font-size: 0.75em;
-      background: #333;
-      padding: 2px 6px;
+      padding: 4px 8px;
+      background: #111;
       border-radius: 4px;
-      color: #aaa;
-    }
-    .event-detail {
-      color: #888;
-      font-size: 0.85em;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateX(-10px); }
-      to { opacity: 1; transform: translateX(0); }
     }
   </style>
 </head>
@@ -153,24 +196,23 @@
     <span id="status" class="status disconnected">disconnected</span>
   </header>
 
-  <div class="container">
-    <div class="agents">
-      <h2>Agents</h2>
-      <div id="agents-list">
-        <div class="no-agents">No active agents</div>
-      </div>
-    </div>
+  <div id="sessions" class="sessions">
+    <div class="no-sessions">セッションなし</div>
+  </div>
+
+  <div class="event-log">
+    <h2>Event Log</h2>
     <div id="events" class="events"></div>
   </div>
 
   <script>
+    const sessionsEl = document.getElementById('sessions');
     const eventsEl = document.getElementById('events');
-    const agentsEl = document.getElementById('agents-list');
     const statusEl = document.getElementById('status');
-    const MAX_EVENTS = 50;
+    const MAX_EVENTS = 20;
 
-    // エージェント状態
-    const agents = new Map();
+    // セッション状態
+    const sessions = new Map();
 
     function connect() {
       const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -191,18 +233,41 @@
           const data = JSON.parse(e.data);
 
           // スナップショット（初期状態）
-          if (data.type === 'snapshot') {
-            agents.clear();
-            for (const agent of data.agents) {
-              agents.set(agent.id, agent);
+          if (data.sessions) {
+            sessions.clear();
+            for (const session of data.sessions) {
+              sessions.set(session.id, session);
             }
-            renderAgents();
+            renderSessions();
+            return;
+          }
+
+          // タイトル更新
+          if (data.type === 'title_update') {
+            const session = sessions.get(data.sessionId);
+            if (session) {
+              session.title = data.title;
+              session.lastSeen = Date.now();
+              renderSessions();
+            }
+            return;
+          }
+
+          // 発話更新
+          if (data.type === 'speech_update') {
+            const session = sessions.get(data.sessionId);
+            if (session) {
+              session.speech = data.speech;
+              session.speechTime = Date.now();
+              session.lastSeen = Date.now();
+              renderSessions();
+            }
             return;
           }
 
           // 通常イベント
           handleEvent(data);
-          addEventToFeed(data);
+          addEventToLog(data);
         } catch (err) {
           console.error('Parse error:', err);
         }
@@ -210,97 +275,178 @@
     }
 
     function handleEvent(event) {
+      const sessionId = event.session_id;
+      if (!sessionId) return;
+
+      let session = sessions.get(sessionId);
+      if (!session) {
+        session = {
+          id: sessionId,
+          projectName: extractProjectName(event.cwd),
+          subAgents: [],
+          lastSeen: Date.now(),
+        };
+        sessions.set(sessionId, session);
+      }
+      session.lastSeen = Date.now();
+
       switch (event.hook_event_name) {
         case 'SubagentStart':
           if (event.agent_id) {
-            agents.set(event.agent_id, {
-              id: event.agent_id,
-              type: event.agent_type || 'unknown',
-              status: 'active',
-              currentTool: null,
-            });
+            // 既存のを探す
+            let sub = session.subAgents.find(s => s.id === event.agent_id);
+            if (!sub) {
+              sub = { id: event.agent_id, type: event.agent_type || 'unknown', status: 'active' };
+              session.subAgents.push(sub);
+            } else {
+              sub.status = 'active';
+              sub.type = event.agent_type || sub.type;
+            }
           }
           break;
 
         case 'SubagentStop':
           if (event.agent_id) {
-            const agent = agents.get(event.agent_id);
-            if (agent) {
-              agent.status = 'inactive';
-              agent.currentTool = null;
+            const sub = session.subAgents.find(s => s.id === event.agent_id);
+            if (sub) {
+              sub.status = 'inactive';
+              sub.currentAction = null;
             }
           }
           break;
 
         case 'PreToolUse':
-          const preId = event.agent_id || `main-${event.session_id}`;
-          let preAgent = agents.get(preId);
-          if (!preAgent) {
-            preAgent = { id: preId, type: 'main', status: 'active' };
-            agents.set(preId, preAgent);
+          const action = extractAction(event);
+          if (event.agent_id) {
+            const sub = session.subAgents.find(s => s.id === event.agent_id);
+            if (sub && action) {
+              sub.currentAction = action;
+              sub.actionTime = Date.now();
+            }
+          } else if (action) {
+            session.currentAction = action;
+            session.actionTime = Date.now();
           }
-          preAgent.currentTool = event.tool_name;
-          preAgent.status = 'active';
           break;
 
         case 'PostToolUse':
-          const postId = event.agent_id || `main-${event.session_id}`;
-          const postAgent = agents.get(postId);
-          if (postAgent) {
-            postAgent.currentTool = null;
-          }
+          // アクションを消さない（吹き出しのように残す）
           break;
 
         case 'SessionEnd':
-          for (const agent of agents.values()) {
-            if (agent.sessionId === event.session_id || !agent.sessionId) {
-              agent.status = 'inactive';
-              agent.currentTool = null;
-            }
-          }
+          session.ended = true;
+          session.currentAction = null;
+          session.subAgents.forEach(s => {
+            s.status = 'inactive';
+            s.currentAction = null;
+          });
           break;
       }
-      renderAgents();
+
+      renderSessions();
     }
 
-    function renderAgents() {
-      const activeAgents = Array.from(agents.values()).filter(a => a.status === 'active');
-      const inactiveAgents = Array.from(agents.values()).filter(a => a.status === 'inactive');
-      const all = [...activeAgents, ...inactiveAgents];
+    function extractProjectName(cwd) {
+      if (!cwd) return 'unknown';
+      const parts = cwd.split('/');
+      return parts[parts.length - 1] || 'unknown';
+    }
 
-      if (all.length === 0) {
-        agentsEl.innerHTML = '<div class="no-agents">No active agents</div>';
+    // アクションの古さに応じてopacityを計算（10秒でフェードアウト開始、30秒で消える）
+    function getActionOpacity(actionTime) {
+      if (!actionTime) return 0.3;
+      const age = Date.now() - actionTime;
+      if (age < 10000) return 1; // 10秒以内は100%
+      if (age > 30000) return 0.3; // 30秒以上は30%
+      // 10-30秒は徐々にフェード
+      return 1 - ((age - 10000) / 20000) * 0.7;
+    }
+
+    function extractAction(event) {
+      const input = event.tool_input;
+      if (!input) return null;
+
+      if (input.description) {
+        return input.description;
+      }
+      if (input.file_path) {
+        const fileName = input.file_path.split('/').pop();
+        return `${fileName} を操作中`;
+      }
+      if (input.command) {
+        return input.command.slice(0, 60) + (input.command.length > 60 ? '...' : '');
+      }
+      if (input.pattern) {
+        return `検索: ${input.pattern}`;
+      }
+      return null;
+    }
+
+    function renderSessions() {
+      // アクティブなセッションを表示
+      // - ended（SessionEnd受信済み）は1分で消える
+      // - それ以外は30分残る
+      const oneMinuteAgo = Date.now() - 60 * 1000;
+      const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
+      const activeSessions = Array.from(sessions.values()).filter(session => {
+        if (session.ended) {
+          return session.lastSeen > oneMinuteAgo;
+        }
+        return session.lastSeen > thirtyMinutesAgo;
+      });
+
+      if (activeSessions.length === 0) {
+        sessionsEl.innerHTML = '<div class="no-sessions">アクティブなセッションなし</div>';
         return;
       }
 
-      agentsEl.innerHTML = all.map(agent => `
-        <div class="agent ${agent.status}">
-          <div class="agent-header">
-            <span class="agent-id">${agent.id.slice(0, 7)}</span>
-            <span class="agent-type">${agent.type}</span>
+      sessionsEl.innerHTML = activeSessions.map(session => {
+        const activeSubAgents = session.subAgents.filter(s => s.status === 'active');
+        // inactiveは表示しない
+        const allSubAgents = activeSubAgents;
+        // session_idの先頭7文字
+        const shortId = session.id.slice(0, 7);
+
+        return `
+          <div class="session">
+            <div class="session-header">
+              <span class="session-project">${session.projectName}</span>
+              <span class="session-id">${shortId}</span>
+            </div>
+            ${session.title ? `<div class="session-title">${session.title}</div>` : ''}
+            ${session.speech ? `<div class="session-speech" style="opacity: ${getActionOpacity(session.speechTime)}">${session.speech}</div>` : ''}
+            ${session.currentAction ? `<div class="session-action" style="opacity: ${getActionOpacity(session.actionTime)}">${session.currentAction}</div>` : ''}
+            ${allSubAgents.length > 0 ? `
+              <div class="subagents">
+                ${allSubAgents.map(sub => `
+                  <div class="subagent">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span class="subagent-type ${sub.type}">${sub.type}</span>
+                      <span class="subagent-action">実行中</span>
+                    </div>
+                    ${sub.currentAction ? `<div class="subagent-speech">${sub.currentAction}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
           </div>
-          ${agent.currentTool ? `<div class="agent-tool">${agent.currentTool}</div>` : ''}
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
-    function addEventToFeed(event) {
+    function addEventToLog(event) {
       const el = document.createElement('div');
-      el.className = `event ${event.hook_event_name}`;
-
+      el.className = 'event';
       const time = new Date(event.logged_at).toLocaleTimeString();
-      const detail = formatDetail(event);
-      const agentId = event.agent_id ? event.agent_id.slice(0, 7) : '';
-
-      el.innerHTML = `
-        <div class="event-header">
-          <span class="event-type">${event.hook_event_name}</span>
-          ${agentId ? `<span class="event-agent">${agentId}</span>` : ''}
-          <span class="event-time">${time}</span>
-        </div>
-        <div class="event-detail">${detail}</div>
-      `;
-
+      // descriptionがあればそれを、なければツール名 + イベント種別
+      let desc = event.tool_input?.description;
+      if (!desc && event.tool_name) {
+        desc = `${event.tool_name}`;
+      }
+      if (!desc) {
+        desc = event.hook_event_name;
+      }
+      el.textContent = `${time} ${desc}`;
       eventsEl.insertBefore(el, eventsEl.firstChild);
 
       while (eventsEl.children.length > MAX_EVENTS) {
@@ -308,26 +454,10 @@
       }
     }
 
-    function formatDetail(event) {
-      switch (event.hook_event_name) {
-        case 'SubagentStart':
-          return `Started (${event.agent_type})`;
-        case 'SubagentStop':
-          return 'Stopped';
-        case 'PreToolUse':
-        case 'PostToolUse':
-          const desc = event.tool_input?.description || '';
-          return `${event.tool_name}: ${desc}`;
-        case 'SessionStart':
-          return `Source: ${event.source}`;
-        case 'SessionEnd':
-          return `Reason: ${event.reason}`;
-        default:
-          return '';
-      }
-    }
-
     connect();
+
+    // 定期的にUIを更新（フェードアウト反映）
+    setInterval(renderSessions, 2000);
   </script>
 </body>
 </html>

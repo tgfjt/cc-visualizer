@@ -4,13 +4,9 @@ import {
   getActiveAgents,
   getAllAgents,
   getSnapshot,
+  getSessions,
   type AgentEvent,
 } from "./state.ts";
-
-// テスト間で状態をリセットするためのヘルパー
-// 注: 実際のstate.tsはモジュールスコープでMapを持っているため、
-// テスト間で状態が共有される。本番ではリセット関数を追加するか、
-// クラスベースの設計に変更すべき。
 
 Deno.test("SubagentStart でエージェントが追加される", () => {
   const event: AgentEvent = {
@@ -18,6 +14,7 @@ Deno.test("SubagentStart でエージェントが追加される", () => {
     session_id: "session-1",
     agent_id: "agent-001",
     agent_type: "Explore",
+    cwd: "/path/to/project",
     logged_at: new Date().toISOString(),
   };
 
@@ -32,7 +29,6 @@ Deno.test("SubagentStart でエージェントが追加される", () => {
 });
 
 Deno.test("SubagentStop でエージェントが inactive になる", () => {
-  // まず開始
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-1",
@@ -41,7 +37,6 @@ Deno.test("SubagentStop でエージェントが inactive になる", () => {
     logged_at: new Date().toISOString(),
   });
 
-  // 次に停止
   processEvent({
     hook_event_name: "SubagentStop",
     session_id: "session-1",
@@ -69,13 +64,14 @@ Deno.test("PreToolUse でツール使用中が記録される", () => {
     session_id: "session-1",
     agent_id: "agent-003",
     tool_name: "Read",
+    tool_input: { description: "Reading file" },
     logged_at: new Date().toISOString(),
   });
 
   const agents = getAllAgents();
   const agent = agents.find((a) => a.id === "agent-003");
 
-  assertEquals(agent?.currentTool, "Read");
+  assertEquals(agent?.currentTool, "Reading file");
 });
 
 Deno.test("PostToolUse でツール使用が終了する", () => {
@@ -92,6 +88,7 @@ Deno.test("PostToolUse でツール使用が終了する", () => {
     session_id: "session-1",
     agent_id: "agent-004",
     tool_name: "Bash",
+    tool_input: { description: "Running command" },
     logged_at: new Date().toISOString(),
   });
 
@@ -110,7 +107,6 @@ Deno.test("PostToolUse でツール使用が終了する", () => {
 });
 
 Deno.test("getActiveAgents は active なエージェントのみ返す", () => {
-  // active なエージェントを追加
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-2",
@@ -119,7 +115,6 @@ Deno.test("getActiveAgents は active なエージェントのみ返す", () => 
     logged_at: new Date().toISOString(),
   });
 
-  // inactive にする別のエージェント
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-2",
@@ -141,8 +136,110 @@ Deno.test("getActiveAgents は active なエージェントのみ返す", () => 
   assertEquals(activeIds.includes("inactive-agent"), false);
 });
 
-Deno.test("getSnapshot は agents を含む", () => {
+Deno.test("getSnapshot は sessions を含む", () => {
   const snapshot = getSnapshot();
 
-  assertEquals(Array.isArray(snapshot.agents), true);
+  assertEquals(Array.isArray(snapshot.sessions), true);
+});
+
+Deno.test("getSessions はセッション単位でグルーピングする", () => {
+  const now = new Date().toISOString();
+
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-group-test",
+    agent_id: "group-agent-1",
+    agent_type: "Plan",
+    cwd: "/path/to/my-project",
+    logged_at: now,
+  });
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-group-test",
+    agent_id: "group-agent-2",
+    agent_type: "Explore",
+    logged_at: now,
+  });
+
+  const sessions = getSessions();
+  const session = sessions.find((s) => s.id === "session-group-test");
+
+  assertEquals(session?.projectName, "my-project");
+  assertEquals(session?.subAgents.length, 2);
+});
+
+Deno.test("複数エージェントが同時に active になれる", () => {
+  const now = new Date().toISOString();
+
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-multi",
+    agent_id: "multi-plan",
+    agent_type: "Plan",
+    logged_at: now,
+  });
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-multi",
+    agent_id: "multi-explore",
+    agent_type: "Explore",
+    logged_at: now,
+  });
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-multi",
+    agent_id: "multi-bash",
+    agent_type: "Bash",
+    logged_at: now,
+  });
+
+  const activeAgents = getActiveAgents();
+  const activeIds = activeAgents.map((a) => a.id);
+
+  assertEquals(activeIds.includes("multi-plan"), true);
+  assertEquals(activeIds.includes("multi-explore"), true);
+  assertEquals(activeIds.includes("multi-bash"), true);
+});
+
+Deno.test("複数エージェントがそれぞれ異なるツールを使用できる", () => {
+  const now = new Date().toISOString();
+
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-tools",
+    agent_id: "tools-agent-1",
+    agent_type: "Explore",
+    logged_at: now,
+  });
+  processEvent({
+    hook_event_name: "SubagentStart",
+    session_id: "session-tools",
+    agent_id: "tools-agent-2",
+    agent_type: "Bash",
+    logged_at: now,
+  });
+
+  processEvent({
+    hook_event_name: "PreToolUse",
+    session_id: "session-tools",
+    agent_id: "tools-agent-1",
+    tool_name: "Grep",
+    tool_input: { description: "Searching code" },
+    logged_at: now,
+  });
+  processEvent({
+    hook_event_name: "PreToolUse",
+    session_id: "session-tools",
+    agent_id: "tools-agent-2",
+    tool_name: "Bash",
+    tool_input: { description: "Running tests" },
+    logged_at: now,
+  });
+
+  const agents = getAllAgents();
+  const agent1 = agents.find((a) => a.id === "tools-agent-1");
+  const agent2 = agents.find((a) => a.id === "tools-agent-2");
+
+  assertEquals(agent1?.currentTool, "Searching code");
+  assertEquals(agent2?.currentTool, "Running tests");
 });

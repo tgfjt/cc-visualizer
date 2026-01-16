@@ -88,7 +88,10 @@ WebSocketで流せる           ✅ 接続・配信確認済み
         ↓
 エージェント状態を管理できる  ✅ state.ts + テスト(8件)
         ↓
-キャラ化（名前、色）         ← 今ここ
+視覚的な識別（ラベル、色）   ← 今ここ
+  - 本体とサブエージェントを区別できる
+  - 誰から誰への依頼/返答かがわかる
+  - 性格付けは不要
         ↓
 つぶやき生成
         ↓
@@ -153,8 +156,8 @@ type AgentEvent =
 interface Agent {
   id: string;
   sessionId: string;
-  name?: string;        // キャラ化後
-  color?: string;       // キャラ化後
+  name?: string;        // 識別ラベル（例: "本体", "コミット"）
+  color?: string;       // 識別色
   status: 'active' | 'inactive';
   lastSeen: Date;
 }
