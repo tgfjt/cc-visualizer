@@ -183,6 +183,112 @@
       padding: 40px;
     }
 
+    /* タイムライン */
+    .timeline-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 16px;
+    }
+    .timeline-lane {
+      display: flex;
+      align-items: flex-start;
+      min-height: 80px;
+      background: #111;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: opacity 0.3s;
+    }
+    .timeline-lane.idle {
+      opacity: 0.4;
+    }
+    .session-id {
+      font-size: 0.7em;
+      color: #555;
+      font-family: monospace;
+    }
+    .timeline-label {
+      width: 180px;
+      min-width: 180px;
+      padding: 12px;
+      background: #1a1a1a;
+      border-right: 1px solid #333;
+    }
+    .timeline-label .project {
+      font-weight: 600;
+      color: #fff;
+      font-size: 0.95em;
+    }
+    .timeline-label .title {
+      font-size: 0.8em;
+      color: #888;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .timeline-label .speech {
+      font-size: 0.75em;
+      color: #7c3aed;
+      margin-top: 6px;
+      font-style: italic;
+    }
+    .timeline-label .current-action {
+      font-size: 0.8em;
+      color: #3b82f6;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .timeline-label .active-subagents {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .subagent-badge {
+      font-size: 0.7em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #333;
+      color: #fff;
+    }
+    .subagent-badge.Explore { background: #8b5cf6; }
+    .subagent-badge.Plan { background: #f59e0b; color: #000; }
+    .subagent-badge.Bash { background: #3b82f6; }
+    .timeline-svg {
+      flex: 1;
+      min-width: 600px;
+      height: 80px;
+    }
+    .timeline-svg .lane-line {
+      stroke: #333;
+      stroke-width: 2;
+    }
+    .timeline-svg .event-point {
+      fill: #7c3aed;
+      cursor: pointer;
+      transition: r 0.2s;
+    }
+    .timeline-svg .event-point:hover {
+      r: 8;
+    }
+    .timeline-svg .event-point.SubagentStart { fill: #22c55e; }
+    .timeline-svg .event-point.SubagentStop { fill: #ef4444; }
+    .timeline-svg .event-point.PreToolUse { fill: #3b82f6; }
+    .timeline-svg .event-point.PostToolUse { fill: #6366f1; }
+    .timeline-svg .subagent-line {
+      stroke: #22c55e;
+      stroke-width: 1.5;
+      stroke-dasharray: 4 2;
+    }
+    .timeline-svg text {
+      fill: #888;
+      font-size: 10px;
+    }
+
     /* イベントログ（小さく下に） */
     .event-log {
       margin-top: 32px;
@@ -258,6 +364,10 @@
           if (data.sessions) {
             sessions.clear();
             for (const session of data.sessions) {
+              // eventHistoryを初期化
+              session.eventHistory = session.eventHistory || [];
+              session.speechHistory = session.speechHistory || [];
+              session.startTime = session.startTime || Date.now();
               sessions.set(session.id, session);
             }
             renderSessions();
@@ -319,11 +429,30 @@
           id: sessionId,
           projectName: extractProjectName(event.cwd),
           subAgents: [],
+          eventHistory: [], // タイムライン用のイベント履歴
+          startTime: Date.now(),
           lastSeen: Date.now(),
         };
         sessions.set(sessionId, session);
       }
       session.lastSeen = Date.now();
+
+      // イベント履歴に追加（タイムライン表示用）
+      if (event.hook_event_name) {
+        if (!session.eventHistory) session.eventHistory = [];
+        session.eventHistory.push({
+          type: event.hook_event_name,
+          tool: event.tool_name,
+          agentId: event.agent_id,
+          agentType: event.agent_type,
+          description: event.tool_input?.description,
+          time: Date.now()
+        });
+        // 最大100件保持（5分分くらい）
+        if (session.eventHistory.length > 100) {
+          session.eventHistory.shift();
+        }
+      }
 
       switch (event.hook_event_name) {
         case 'SubagentStart':
@@ -419,8 +548,6 @@
 
     function renderSessions() {
       // アクティブなセッションを表示
-      // - ended（SessionEnd受信済み）は1分で消える
-      // - それ以外は30分残る
       const oneMinuteAgo = Date.now() - 60 * 1000;
       const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
       const activeSessions = Array.from(sessions.values()).filter(session => {
@@ -435,46 +562,116 @@
         return;
       }
 
-      sessionsEl.innerHTML = activeSessions.map(session => {
-        const activeSubAgents = session.subAgents.filter(s => s.status === 'active');
-        // inactiveは表示しない
-        const allSubAgents = activeSubAgents;
-        // session_idの先頭7文字
-        const shortId = session.id.slice(0, 7);
+      // タイムライン表示範囲（直近5分）
+      const now = Date.now();
+      const timeWindow = 5 * 60 * 1000; // 5分
+      const startTime = now - timeWindow;
+      const svgWidth = 600;
+      const timeToX = (t) => Math.max(0, Math.min(svgWidth, ((t - startTime) / timeWindow) * svgWidth));
 
-        return `
-          <div class="session">
-            <div class="session-header">
-              <span class="session-project">${session.projectName}</span>
-              <span class="session-id">${shortId}</span>
-            </div>
-            ${session.title ? `<div class="session-title">${session.title}</div>` : ''}
-            ${session.speechHistory && session.speechHistory.length > 0 ? `
-              <div class="speech-container">
-                ${session.speechHistory.map((s, i) => {
-                  const opacity = getActionOpacity(s.time);
-                  const isOlder = i > 0;
-                  return `<div class="session-speech${isOlder ? ' older' : ''}" style="opacity: ${opacity}">${s.text}</div>`;
-                }).join('')}
-              </div>
-            ` : ''}
-            ${session.currentAction ? `<div class="session-action" style="opacity: ${getActionOpacity(session.actionTime)}">${session.currentAction}</div>` : ''}
-            ${allSubAgents.length > 0 ? `
-              <div class="subagents">
-                ${allSubAgents.map(sub => `
-                  <div class="subagent">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span class="subagent-type ${sub.type}">${sub.type}</span>
-                      <span class="subagent-action">実行中</span>
-                    </div>
-                    ${sub.currentAction ? `<div class="subagent-speech">${sub.currentAction}</div>` : ''}
+      sessionsEl.innerHTML = `<div class="timeline-container">
+        ${activeSessions.map(session => {
+          const events = session.eventHistory || [];
+          const speech = session.speechHistory?.[0]?.text || '';
+
+          // メインエージェントのイベント
+          const mainEvents = events.filter(e => !e.agentId && e.type === 'PreToolUse');
+
+          // サブエージェントのイベント（agentIdでグループ化）
+          const subAgentEvents = {};
+          events.forEach(e => {
+            if (e.agentId) {
+              if (!subAgentEvents[e.agentId]) {
+                subAgentEvents[e.agentId] = { type: e.agentType, events: [] };
+              }
+              subAgentEvents[e.agentId].events.push(e);
+            }
+          });
+
+          // SVG要素を生成
+          const mainY = 25;
+          const subY = 55;
+
+          let svgContent = `
+            <!-- メインライン -->
+            <line class="lane-line" x1="0" y1="${mainY}" x2="${svgWidth}" y2="${mainY}" />
+            <!-- 現在位置マーカー -->
+            <circle cx="${svgWidth - 5}" cy="${mainY}" r="4" fill="#7c3aed" opacity="0.5">
+              <animate attributeName="r" values="4;6;4" dur="1s" repeatCount="indefinite" />
+            </circle>
+          `;
+
+          // メインエージェントのイベントポイント
+          let lastLabelX = -50; // ラベル重複防止用
+          mainEvents.forEach((e, i) => {
+            const x = timeToX(e.time);
+            const displayX = Math.min(x, svgWidth - 20);
+            if (displayX >= 10) {
+              // ポイント
+              svgContent += `<circle class="event-point ${e.type}" cx="${displayX}" cy="${mainY}" r="5" />`;
+              // ラベル（ツール名）- 40px以上離れてたら表示
+              if (displayX - lastLabelX > 40) {
+                const label = e.tool || e.type;
+                svgContent += `<text x="${displayX}" y="${mainY + 15}" text-anchor="middle" fill="#888" font-size="9">${label}</text>`;
+                lastLabelX = displayX;
+              }
+            }
+          });
+
+          // サブエージェントの線とイベント
+          let subIndex = 0;
+          Object.entries(subAgentEvents).forEach(([agentId, data]) => {
+            const yOffset = subY + subIndex * 20;
+            const agentEvents = data.events.filter(e => e.type === 'PreToolUse' || e.type === 'SubagentStart');
+            if (agentEvents.length > 0) {
+              const firstX = timeToX(agentEvents[0].time);
+              const lastEvent = agentEvents[agentEvents.length - 1];
+              const lastX = timeToX(lastEvent.time);
+
+              // 分岐線
+              svgContent += `<line class="subagent-line" x1="${firstX}" y1="${mainY}" x2="${firstX}" y2="${yOffset}" />`;
+              svgContent += `<line class="subagent-line" x1="${firstX}" y1="${yOffset}" x2="${lastX + 10}" y2="${yOffset}" />`;
+
+              // サブエージェントラベル
+              svgContent += `<text x="${firstX + 5}" y="${yOffset - 3}" fill="#22c55e" font-size="9">${data.type}</text>`;
+
+              // イベントポイントとラベル
+              agentEvents.filter(e => e.type === 'PreToolUse').forEach(e => {
+                const x = timeToX(e.time);
+                svgContent += `<circle class="event-point PreToolUse" cx="${x}" cy="${yOffset}" r="4" />`;
+                svgContent += `<text x="${x}" y="${yOffset + 12}" text-anchor="middle" fill="#666" font-size="8">${e.tool || ''}</text>`;
+              });
+            }
+            subIndex++;
+          });
+
+          // アクティブなサブエージェント
+          const activeSubAgents = (session.subAgents || []).filter(s => s.status === 'active');
+
+          // 最近更新があったかどうか（1分以内）
+          const isRecent = session.lastSeen > Date.now() - 60 * 1000;
+          const shortId = session.id.slice(0, 7);
+
+          return `
+            <div class="timeline-lane${isRecent ? '' : ' idle'}" data-session-id="${session.id}">
+              <div class="timeline-label">
+                <div class="project">${session.projectName} <span class="session-id">${shortId}</span></div>
+                ${session.title ? `<div class="title">${session.title}</div>` : ''}
+                ${speech ? `<div class="speech">"${speech.slice(0, 40)}..."</div>` : ''}
+                ${session.currentAction ? `<div class="current-action">→ ${session.currentAction}</div>` : ''}
+                ${activeSubAgents.length > 0 ? `
+                  <div class="active-subagents">
+                    ${activeSubAgents.map(s => `<span class="subagent-badge ${s.type}">${s.type}</span>`).join('')}
                   </div>
-                `).join('')}
+                ` : ''}
               </div>
-            ` : ''}
-          </div>
-        `;
-      }).join('');
+              <svg class="timeline-svg" viewBox="0 0 ${svgWidth} 80" preserveAspectRatio="xMaxYMid meet">
+                ${svgContent}
+              </svg>
+            </div>
+          `;
+        }).join('')}
+      </div>`;
     }
 
     function addEventToLog(event) {
