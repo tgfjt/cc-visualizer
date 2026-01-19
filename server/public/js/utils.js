@@ -2,6 +2,8 @@
  * ユーティリティ関数
  */
 
+import { TOOL_ICONS } from "./config.js";
+
 /**
  * タイムスタンプをHH:MM形式にフォーマット
  * @param {number} timestamp
@@ -55,17 +57,5 @@ export function extractProjectName(cwd) {
  * @returns {string}
  */
 export function getToolIcon(toolName) {
-  const icons = {
-    Read: "📖",
-    Edit: "✏️",
-    Write: "📝",
-    Bash: "💻",
-    Grep: "🔍",
-    Glob: "📁",
-    Task: "👥",
-    WebFetch: "🌐",
-    WebSearch: "🔎",
-    TodoWrite: "📋",
-  };
-  return icons[toolName] || "🔧";
+  return TOOL_ICONS[toolName] || "🔧";
 }
