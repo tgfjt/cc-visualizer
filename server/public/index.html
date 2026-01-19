@@ -587,12 +587,14 @@
       // アクティブなセッションを表示
       const oneMinuteAgo = Date.now() - 60 * 1000;
       const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
-      const activeSessions = Array.from(sessions.values()).filter(session => {
-        if (session.ended) {
-          return session.lastSeen > oneMinuteAgo;
-        }
-        return session.lastSeen > thirtyMinutesAgo;
-      });
+      const activeSessions = Array.from(sessions.values())
+        .filter(session => {
+          if (session.ended) {
+            return session.lastSeen > oneMinuteAgo;
+          }
+          return session.lastSeen > thirtyMinutesAgo;
+        })
+        .sort((a, b) => b.lastSeen - a.lastSeen); // 最新アクティビティ順
 
       if (activeSessions.length === 0) {
         sessionsEl.innerHTML = '<div class="no-sessions">アクティブなセッションなし</div>';
