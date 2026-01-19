@@ -2,9 +2,9 @@ import { tailFile } from "./tail.ts";
 import { processEvent, updateSessionTitle, updateSessionSpeech, getSnapshot, type AgentEvent } from "./state.ts";
 import { broadcast } from "./broadcast.ts";
 
-const LOG_FILE = `${Deno.env.get("HOME")}/.cc-visualizer/events.ndjson`;
+const LOG_FILE = Deno.env.get("LOG_FILE") || `${Deno.env.get("HOME")}/.cc-visualizer/events.ndjson`;
 const HISTORY_FILE = `${Deno.env.get("HOME")}/.claude/history.jsonl`;
-const PORT = 8181;
+const PORT = Number(Deno.env.get("PORT")) || 8181;
 const SPEECH_MAX_LENGTH = 60; // 発話の最大表示文字数
 
 // 接続中のWebSocketクライアント

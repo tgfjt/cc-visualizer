@@ -1,0 +1,13 @@
+{
+  "name": "cc-visualizer-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pretest": "mkdir -p .tmp && echo '' > .tmp/events.ndjson",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  }
+}
