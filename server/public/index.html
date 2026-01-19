@@ -36,10 +36,7 @@
 
     /* セッション */
     .sessions {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      max-width: 800px;
+      display: block;
     }
     .session {
       background: #111;
@@ -185,10 +182,9 @@
 
     /* チャット形式 */
     .chat-container {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
       gap: 16px;
-      max-width: 600px;
     }
     .chat-session {
       background: #111;
