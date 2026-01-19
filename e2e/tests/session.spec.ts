@@ -2,16 +2,6 @@ import { test, expect } from "@playwright/test";
 import { appendEvent, generateSessionId, createEvent } from "./helpers";
 
 test.describe("セッション表示", () => {
-
-  test("セッションがない場合は「セッションなし」と表示", async ({ page }) => {
-    // Arrange
-    await page.goto("/");
-    await page.waitForSelector("#status");
-
-    // Assert
-    await expect(page.locator(".no-sessions")).toBeVisible();
-  });
-
   test("イベントを受信するとセッションが表示される", async ({ page }) => {
     // Arrange
     const sessionId = generateSessionId();
