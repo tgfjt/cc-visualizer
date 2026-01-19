@@ -183,114 +183,90 @@
       padding: 40px;
     }
 
-    /* タイムライン */
-    .timeline-container {
+    /* チャット形式 */
+    .chat-container {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 16px;
+      gap: 16px;
+      max-width: 600px;
     }
-    .timeline-lane {
-      display: flex;
-      align-items: flex-start;
-      min-height: 80px;
+    .chat-session {
       background: #111;
-      border-radius: 8px;
-      overflow: hidden;
-      transition: opacity 0.3s;
+      border-radius: 12px;
+      padding: 16px;
+      border-left: 4px solid #7c3aed;
     }
-    .timeline-lane.idle {
-      opacity: 0.4;
+    .chat-session.idle {
+      opacity: 0.5;
     }
-    .session-id {
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #333;
+    }
+    .chat-header .project {
+      font-weight: 600;
+      color: #fff;
+      font-size: 1em;
+    }
+    .chat-header .session-id {
       font-size: 0.7em;
       color: #555;
       font-family: monospace;
     }
-    .timeline-label {
-      width: 180px;
-      min-width: 180px;
-      padding: 12px;
-      background: #1a1a1a;
-      border-right: 1px solid #333;
-    }
-    .timeline-label .project {
-      font-weight: 600;
-      color: #fff;
-      font-size: 0.95em;
-    }
-    .timeline-label .title {
-      font-size: 0.8em;
+    .chat-header .title {
+      font-size: 0.85em;
       color: #888;
-      margin-top: 4px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      margin-left: auto;
     }
-    .timeline-label .speech {
-      font-size: 0.75em;
-      color: #7c3aed;
-      margin-top: 6px;
-      font-style: italic;
-    }
-    .timeline-label .current-action {
-      font-size: 0.8em;
-      color: #3b82f6;
-      margin-top: 4px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .timeline-label .active-subagents {
+    .chat-messages {
       display: flex;
-      gap: 4px;
-      margin-top: 6px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 300px;
+      overflow-y: auto;
     }
-    .subagent-badge {
-      font-size: 0.7em;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: #333;
-      color: #fff;
+    .chat-message {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.9em;
+      line-height: 1.4;
     }
-    .subagent-badge.Explore { background: #8b5cf6; }
-    .subagent-badge.Plan { background: #f59e0b; color: #000; }
-    .subagent-badge.Bash { background: #3b82f6; }
-    .subagent-badge.inactive {
-      opacity: 0.6;
-      border: 1px dashed #666;
+    .chat-message .time {
+      color: #555;
+      font-size: 0.8em;
+      font-family: monospace;
+      flex-shrink: 0;
+      width: 45px;
     }
-    .timeline-svg {
-      flex: 1;
-      min-width: 600px;
-      height: 80px;
+    .chat-message .sender {
+      flex-shrink: 0;
     }
-    .timeline-svg .lane-line {
-      stroke: #333;
-      stroke-width: 2;
+    .chat-message .sender.main {
+      color: #7c3aed;
     }
-    .timeline-svg .event-point {
-      fill: #7c3aed;
-      cursor: pointer;
-      transition: r 0.2s;
+    .chat-message .sender.sub {
+      color: #22c55e;
     }
-    .timeline-svg .event-point:hover {
-      r: 8;
+    .chat-message .mention {
+      color: #3b82f6;
+      font-weight: 500;
     }
-    .timeline-svg .event-point.SubagentStart { fill: #22c55e; }
-    .timeline-svg .event-point.SubagentStop { fill: #ef4444; }
-    .timeline-svg .event-point.PreToolUse { fill: #3b82f6; }
-    .timeline-svg .event-point.PostToolUse { fill: #6366f1; }
-    .timeline-svg .subagent-line {
-      stroke: #22c55e;
-      stroke-width: 1.5;
-      stroke-dasharray: 4 2;
+    .chat-message .text {
+      color: #ccc;
     }
-    .timeline-svg text {
-      fill: #888;
-      font-size: 10px;
+    .chat-message.reply .text {
+      color: #888;
+    }
+    .chat-empty {
+      color: #555;
+      font-style: italic;
+      font-size: 0.85em;
+      padding: 8px;
     }
 
     /* イベントログ（小さく下に） */
@@ -435,6 +411,7 @@
           projectName: extractProjectName(event.cwd),
           subAgents: [],
           eventHistory: [], // タイムライン用のイベント履歴
+          conversations: [], // エージェント間のやりとり
           startTime: Date.now(),
           lastSeen: Date.now(),
         };
@@ -478,6 +455,8 @@
           if (event.agent_id) {
             const sub = session.subAgents.find(s => s.id === event.agent_id);
             if (sub) {
+              // サブ → メインへの「報告」
+              addConversation(session, sub.type, 'main', '完了');
               sub.status = 'inactive';
               sub.currentAction = null;
             }
@@ -492,9 +471,24 @@
               sub.currentAction = action;
               sub.actionTime = Date.now();
             }
-          } else if (action) {
-            session.currentAction = action;
-            session.actionTime = Date.now();
+          } else {
+            // メインエージェントのツール使用
+            if (action) {
+              session.currentAction = action;
+              session.actionTime = Date.now();
+            }
+            // ツール使用を会話として追加
+            const toolName = event.tool_name;
+            if (toolName === 'Task' && event.tool_input) {
+              // Taskツールの場合は「依頼」として
+              const subType = event.tool_input.subagent_type || 'サブ';
+              const desc = event.tool_input.description || '作業依頼';
+              addConversation(session, 'main', subType, desc);
+            } else if (toolName && action) {
+              // その他のツールは自分への独り言的に
+              const toolIcon = getToolIcon(toolName);
+              addConversation(session, 'main', null, `${toolIcon} ${action}`);
+            }
           }
           break;
 
@@ -519,6 +513,38 @@
       if (!cwd) return 'unknown';
       const parts = cwd.split('/');
       return parts[parts.length - 1] || 'unknown';
+    }
+
+    // ツール名からアイコンを取得
+    function getToolIcon(toolName) {
+      const icons = {
+        'Read': '📖',
+        'Edit': '✏️',
+        'Write': '📝',
+        'Bash': '💻',
+        'Grep': '🔍',
+        'Glob': '📁',
+        'Task': '👥',
+        'WebFetch': '🌐',
+        'WebSearch': '🔎',
+        'TodoWrite': '📋',
+      };
+      return icons[toolName] || '🔧';
+    }
+
+    // 会話を追加
+    function addConversation(session, from, to, message) {
+      if (!session.conversations) session.conversations = [];
+      session.conversations.push({
+        from,
+        to,
+        message,
+        time: Date.now()
+      });
+      // 最大10件保持
+      if (session.conversations.length > 10) {
+        session.conversations.shift();
+      }
     }
 
     // アクションの古さに応じてopacityを計算（10秒でフェードアウト開始、30秒で消える）
@@ -551,6 +577,12 @@
       return null;
     }
 
+    // 時刻をHH:MM形式にフォーマット
+    function formatTime(timestamp) {
+      const d = new Date(timestamp);
+      return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    }
+
     function renderSessions() {
       // アクティブなセッションを表示
       const oneMinuteAgo = Date.now() - 60 * 1000;
@@ -567,120 +599,35 @@
         return;
       }
 
-      // タイムライン表示範囲（直近5分）
-      const now = Date.now();
-      const timeWindow = 5 * 60 * 1000; // 5分
-      const startTime = now - timeWindow;
-      const svgWidth = 600;
-      const timeToX = (t) => Math.max(0, Math.min(svgWidth, ((t - startTime) / timeWindow) * svgWidth));
-
-      sessionsEl.innerHTML = `<div class="timeline-container">
+      sessionsEl.innerHTML = `<div class="chat-container">
         ${activeSessions.map(session => {
-          const events = session.eventHistory || [];
-          const speech = session.speechHistory?.[0]?.text || '';
-
-          // メインエージェントのイベント
-          const mainEvents = events.filter(e => !e.agentId && e.type === 'PreToolUse');
-
-          // サブエージェントのイベント（agentIdでグループ化）
-          const subAgentEvents = {};
-          events.forEach(e => {
-            if (e.agentId) {
-              if (!subAgentEvents[e.agentId]) {
-                subAgentEvents[e.agentId] = { type: e.agentType || 'unknown', events: [] };
-              }
-              // SubagentStartでtypeを更新（より正確な情報）
-              if (e.type === 'SubagentStart' && e.agentType) {
-                subAgentEvents[e.agentId].type = e.agentType;
-              }
-              subAgentEvents[e.agentId].events.push(e);
-            }
-          });
-
-          // SVG要素を生成
-          const mainY = 25;
-          const subY = 55;
-
-          let svgContent = `
-            <!-- メインライン -->
-            <line class="lane-line" x1="0" y1="${mainY}" x2="${svgWidth}" y2="${mainY}" />
-            <!-- 現在位置マーカー -->
-            <circle cx="${svgWidth - 5}" cy="${mainY}" r="4" fill="#7c3aed" opacity="0.5">
-              <animate attributeName="r" values="4;6;4" dur="1s" repeatCount="indefinite" />
-            </circle>
-          `;
-
-          // メインエージェントのイベントポイント
-          let lastLabelX = -50; // ラベル重複防止用
-          mainEvents.forEach((e, i) => {
-            const x = timeToX(e.time);
-            const displayX = Math.min(x, svgWidth - 20);
-            if (displayX >= 10) {
-              // ポイント
-              svgContent += `<circle class="event-point ${e.type}" cx="${displayX}" cy="${mainY}" r="5" />`;
-              // ラベル（ツール名）- 40px以上離れてたら表示
-              if (displayX - lastLabelX > 40) {
-                const label = e.tool || e.type;
-                svgContent += `<text x="${displayX}" y="${mainY + 15}" text-anchor="middle" fill="#888" font-size="9">${label}</text>`;
-                lastLabelX = displayX;
-              }
-            }
-          });
-
-          // サブエージェントの線とイベント
-          let subIndex = 0;
-          Object.entries(subAgentEvents).forEach(([agentId, data]) => {
-            const yOffset = subY + subIndex * 20;
-            const agentEvents = data.events.filter(e => e.type === 'PreToolUse' || e.type === 'SubagentStart');
-            if (agentEvents.length > 0) {
-              const firstX = timeToX(agentEvents[0].time);
-              const lastEvent = agentEvents[agentEvents.length - 1];
-              const lastX = timeToX(lastEvent.time);
-
-              // 分岐線
-              svgContent += `<line class="subagent-line" x1="${firstX}" y1="${mainY}" x2="${firstX}" y2="${yOffset}" />`;
-              svgContent += `<line class="subagent-line" x1="${firstX}" y1="${yOffset}" x2="${lastX + 10}" y2="${yOffset}" />`;
-
-              // サブエージェントラベル
-              svgContent += `<text x="${firstX + 5}" y="${yOffset - 3}" fill="#22c55e" font-size="9">${data.type}</text>`;
-
-              // イベントポイントとラベル
-              agentEvents.filter(e => e.type === 'PreToolUse').forEach(e => {
-                const x = timeToX(e.time);
-                svgContent += `<circle class="event-point PreToolUse" cx="${x}" cy="${yOffset}" r="4" />`;
-                svgContent += `<text x="${x}" y="${yOffset + 12}" text-anchor="middle" fill="#666" font-size="8">${e.tool || ''}</text>`;
-              });
-            }
-            subIndex++;
-          });
-
-          // サブエージェント（activeを先に、inactiveを後に）
-          const allSubAgents = (session.subAgents || []);
-          const sortedSubAgents = [
-            ...allSubAgents.filter(s => s.status === 'active'),
-            ...allSubAgents.filter(s => s.status !== 'active')
-          ];
-
-          // 最近更新があったかどうか（1分以内）
           const isRecent = session.lastSeen > Date.now() - 60 * 1000;
           const shortId = session.id.slice(0, 7);
+          const conversations = session.conversations || [];
 
           return `
-            <div class="timeline-lane${isRecent ? '' : ' idle'}" data-session-id="${session.id}">
-              <div class="timeline-label">
-                <div class="project">${session.projectName} <span class="session-id">${shortId}</span></div>
-                ${session.title ? `<div class="title">${session.title}</div>` : ''}
-                ${speech ? `<div class="speech">"${speech.slice(0, 40)}..."</div>` : ''}
-                ${session.currentAction ? `<div class="current-action">→ ${session.currentAction}</div>` : ''}
-                ${sortedSubAgents.length > 0 ? `
-                  <div class="active-subagents">
-                    ${sortedSubAgents.map(s => `<span class="subagent-badge ${s.type}${s.status !== 'active' ? ' inactive' : ''}">${s.type}</span>`).join('')}
-                  </div>
-                ` : ''}
+            <div class="chat-session${isRecent ? '' : ' idle'}">
+              <div class="chat-header">
+                <span class="project">${session.projectName}</span>
+                <span class="session-id">${shortId}</span>
+                ${session.title ? `<span class="title">${session.title}</span>` : ''}
               </div>
-              <svg class="timeline-svg" viewBox="0 0 ${svgWidth} 80" preserveAspectRatio="xMaxYMid meet">
-                ${svgContent}
-              </svg>
+              <div class="chat-messages">
+                ${conversations.length > 0 ? conversations.slice(-8).map(c => {
+                  const time = formatTime(c.time);
+                  const isFromMain = c.from === 'main';
+                  const sender = isFromMain ? '💁' : c.from;
+                  const mention = (c.to && c.to !== 'main') ? `@${c.to}` : '';
+                  const isReply = !isFromMain;
+
+                  return `<div class="chat-message${isReply ? ' reply' : ''}">
+                    <span class="time">${time}</span>
+                    <span class="sender ${isFromMain ? 'main' : 'sub'}">${sender}:</span>
+                    ${mention ? `<span class="mention">${mention}</span>` : ''}
+                    <span class="text">${c.message}</span>
+                  </div>`;
+                }).join('') : '<div class="chat-empty">待機中...</div>'}
+              </div>
             </div>
           `;
         }).join('')}
