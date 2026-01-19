@@ -5,10 +5,61 @@ import {
   getAllAgents,
   getSnapshot,
   getSessions,
+  clearSessions,
   type AgentEvent,
 } from "./state.ts";
 
-Deno.test("SubagentStart でエージェントが追加される", () => {
+// =============================================================================
+// clearSessions のテスト
+// =============================================================================
+
+Deno.test("clearSessions: セッションがすべてクリアされる", () => {
+  // Arrange
+  const event: AgentEvent = {
+    hook_event_name: "PreToolUse",
+    session_id: "clear-test-session",
+    cwd: "/path/to/project",
+    logged_at: new Date().toISOString(),
+  };
+  processEvent(event);
+
+  // Act
+  clearSessions();
+
+  // Assert
+  assertEquals(getSessions().length, 0);
+});
+
+Deno.test("clearSessions: クリア後に新しいセッションを追加できる", () => {
+  // Arrange
+  processEvent({
+    hook_event_name: "PreToolUse",
+    session_id: "old-session",
+    logged_at: new Date().toISOString(),
+  });
+  clearSessions();
+
+  // Act
+  processEvent({
+    hook_event_name: "PreToolUse",
+    session_id: "new-session",
+    cwd: "/new/project",
+    logged_at: new Date().toISOString(),
+  });
+
+  // Assert
+  const sessions = getSessions();
+  assertEquals(sessions.length, 1);
+  assertEquals(sessions[0].id, "new-session");
+});
+
+// =============================================================================
+// SubagentStart / SubagentStop のテスト
+// =============================================================================
+
+Deno.test("SubagentStart: エージェントが追加される", () => {
+  // Arrange
+  clearSessions();
   const event: AgentEvent = {
     hook_event_name: "SubagentStart",
     session_id: "session-1",
@@ -18,17 +69,20 @@ Deno.test("SubagentStart でエージェントが追加される", () => {
     logged_at: new Date().toISOString(),
   };
 
+  // Act
   processEvent(event);
 
+  // Assert
   const agents = getAllAgents();
   const agent = agents.find((a) => a.id === "agent-001");
-
   assertEquals(agent?.status, "active");
   assertEquals(agent?.type, "Explore");
   assertEquals(agent?.sessionId, "session-1");
 });
 
-Deno.test("SubagentStop でエージェントが inactive になる", () => {
+Deno.test("SubagentStop: エージェントがinactiveになる", () => {
+  // Arrange
+  clearSessions();
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-1",
@@ -37,6 +91,7 @@ Deno.test("SubagentStop でエージェントが inactive になる", () => {
     logged_at: new Date().toISOString(),
   });
 
+  // Act
   processEvent({
     hook_event_name: "SubagentStop",
     session_id: "session-1",
@@ -44,13 +99,19 @@ Deno.test("SubagentStop でエージェントが inactive になる", () => {
     logged_at: new Date().toISOString(),
   });
 
+  // Assert
   const agents = getAllAgents();
   const agent = agents.find((a) => a.id === "agent-002");
-
   assertEquals(agent?.status, "inactive");
 });
 
-Deno.test("PreToolUse でツール使用中が記録される", () => {
+// =============================================================================
+// PreToolUse / PostToolUse のテスト
+// =============================================================================
+
+Deno.test("PreToolUse: ツール使用中が記録される", () => {
+  // Arrange
+  clearSessions();
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-1",
@@ -59,6 +120,7 @@ Deno.test("PreToolUse でツール使用中が記録される", () => {
     logged_at: new Date().toISOString(),
   });
 
+  // Act
   processEvent({
     hook_event_name: "PreToolUse",
     session_id: "session-1",
@@ -68,13 +130,15 @@ Deno.test("PreToolUse でツール使用中が記録される", () => {
     logged_at: new Date().toISOString(),
   });
 
+  // Assert
   const agents = getAllAgents();
   const agent = agents.find((a) => a.id === "agent-003");
-
-  assertEquals(agent?.currentTool, "Reading file");
+  assertEquals(agent?.currentAction, "Reading file");
 });
 
-Deno.test("PostToolUse でツール使用が終了する", () => {
+Deno.test("PostToolUse: ツール使用が終了する", () => {
+  // Arrange
+  clearSessions();
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-1",
@@ -82,7 +146,6 @@ Deno.test("PostToolUse でツール使用が終了する", () => {
     agent_type: "Bash",
     logged_at: new Date().toISOString(),
   });
-
   processEvent({
     hook_event_name: "PreToolUse",
     session_id: "session-1",
@@ -92,6 +155,7 @@ Deno.test("PostToolUse でツール使用が終了する", () => {
     logged_at: new Date().toISOString(),
   });
 
+  // Act
   processEvent({
     hook_event_name: "PostToolUse",
     session_id: "session-1",
@@ -100,13 +164,19 @@ Deno.test("PostToolUse でツール使用が終了する", () => {
     logged_at: new Date().toISOString(),
   });
 
+  // Assert
   const agents = getAllAgents();
   const agent = agents.find((a) => a.id === "agent-004");
-
-  assertEquals(agent?.currentTool, undefined);
+  assertEquals(agent?.currentAction, undefined);
 });
 
-Deno.test("getActiveAgents は active なエージェントのみ返す", () => {
+// =============================================================================
+// getActiveAgents のテスト
+// =============================================================================
+
+Deno.test("getActiveAgents: activeなエージェントのみ返す", () => {
+  // Arrange
+  clearSessions();
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-2",
@@ -114,7 +184,6 @@ Deno.test("getActiveAgents は active なエージェントのみ返す", () => 
     agent_type: "Explore",
     logged_at: new Date().toISOString(),
   });
-
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-2",
@@ -129,22 +198,34 @@ Deno.test("getActiveAgents は active なエージェントのみ返す", () => 
     logged_at: new Date().toISOString(),
   });
 
+  // Act
   const activeAgents = getActiveAgents();
-  const activeIds = activeAgents.map((a) => a.id);
 
+  // Assert
+  const activeIds = activeAgents.map((a) => a.id);
   assertEquals(activeIds.includes("active-agent"), true);
   assertEquals(activeIds.includes("inactive-agent"), false);
 });
 
-Deno.test("getSnapshot は sessions を含む", () => {
+// =============================================================================
+// getSnapshot / getSessions のテスト
+// =============================================================================
+
+Deno.test("getSnapshot: sessionsを含む", () => {
+  // Arrange
+  clearSessions();
+
+  // Act
   const snapshot = getSnapshot();
 
+  // Assert
   assertEquals(Array.isArray(snapshot.sessions), true);
 });
 
-Deno.test("getSessions はセッション単位でグルーピングする", () => {
+Deno.test("getSessions: セッション単位でグルーピングする", () => {
+  // Arrange
+  clearSessions();
   const now = new Date().toISOString();
-
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-group-test",
@@ -161,16 +242,23 @@ Deno.test("getSessions はセッション単位でグルーピングする", () 
     logged_at: now,
   });
 
+  // Act
   const sessions = getSessions();
-  const session = sessions.find((s) => s.id === "session-group-test");
 
+  // Assert
+  const session = sessions.find((s) => s.id === "session-group-test");
   assertEquals(session?.projectName, "my-project");
   assertEquals(session?.subAgents.length, 2);
 });
 
-Deno.test("複数エージェントが同時に active になれる", () => {
-  const now = new Date().toISOString();
+// =============================================================================
+// 複数エージェントのテスト
+// =============================================================================
 
+Deno.test("複数エージェント: 同時にactiveになれる", () => {
+  // Arrange
+  clearSessions();
+  const now = new Date().toISOString();
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-multi",
@@ -193,17 +281,20 @@ Deno.test("複数エージェントが同時に active になれる", () => {
     logged_at: now,
   });
 
+  // Act
   const activeAgents = getActiveAgents();
-  const activeIds = activeAgents.map((a) => a.id);
 
+  // Assert
+  const activeIds = activeAgents.map((a) => a.id);
   assertEquals(activeIds.includes("multi-plan"), true);
   assertEquals(activeIds.includes("multi-explore"), true);
   assertEquals(activeIds.includes("multi-bash"), true);
 });
 
-Deno.test("複数エージェントがそれぞれ異なるツールを使用できる", () => {
+Deno.test("複数エージェント: それぞれ異なるツールを使用できる", () => {
+  // Arrange
+  clearSessions();
   const now = new Date().toISOString();
-
   processEvent({
     hook_event_name: "SubagentStart",
     session_id: "session-tools",
@@ -219,6 +310,7 @@ Deno.test("複数エージェントがそれぞれ異なるツールを使用で
     logged_at: now,
   });
 
+  // Act
   processEvent({
     hook_event_name: "PreToolUse",
     session_id: "session-tools",
@@ -236,10 +328,10 @@ Deno.test("複数エージェントがそれぞれ異なるツールを使用で
     logged_at: now,
   });
 
+  // Assert
   const agents = getAllAgents();
   const agent1 = agents.find((a) => a.id === "tools-agent-1");
   const agent2 = agents.find((a) => a.id === "tools-agent-2");
-
-  assertEquals(agent1?.currentTool, "Searching code");
-  assertEquals(agent2?.currentTool, "Running tests");
+  assertEquals(agent1?.currentAction, "Searching code");
+  assertEquals(agent2?.currentAction, "Running tests");
 });

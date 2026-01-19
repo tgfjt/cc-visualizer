@@ -1,5 +1,6 @@
 import { tailFile } from "./tail.ts";
 import { processEvent, updateSessionTitle, updateSessionSpeech, getSnapshot, type AgentEvent } from "./state.ts";
+import { broadcast } from "./broadcast.ts";
 
 const LOG_FILE = `${Deno.env.get("HOME")}/.cc-visualizer/events.ndjson`;
 const HISTORY_FILE = `${Deno.env.get("HOME")}/.claude/history.jsonl`;
@@ -56,27 +57,18 @@ async function startTailing() {
     }
 
     // 全クライアントに配信
-    for (const client of clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(line);
-      }
-    }
+    broadcast(clients, line);
 
     // transcriptから発話を取得して配信（agent_idがない=メインエージェントの場合のみ）
     if (event?.transcript_path && !event.agent_id) {
       const speech = await getLatestSpeech(event.transcript_path);
       if (speech) {
         updateSessionSpeech(event.session_id, speech);
-        const update = JSON.stringify({
+        broadcast(clients, JSON.stringify({
           type: "speech_update",
           sessionId: event.session_id,
           speech,
-        });
-        for (const client of clients) {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(update);
-          }
-        }
+        }));
       }
     }
   }
@@ -92,12 +84,11 @@ async function startHistoryTailing() {
       if (entry.sessionId && entry.display) {
         updateSessionTitle(entry.sessionId, entry.display);
         // タイトル更新をクライアントに配信
-        const update = JSON.stringify({ type: "title_update", sessionId: entry.sessionId, title: entry.display });
-        for (const client of clients) {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(update);
-          }
-        }
+        broadcast(clients, JSON.stringify({
+          type: "title_update",
+          sessionId: entry.sessionId,
+          title: entry.display,
+        }));
       }
     } catch {
       // パース失敗は無視
@@ -147,6 +138,19 @@ async function handleRequest(req: Request): Promise<Response> {
         "Access-Control-Allow-Headers": "*",
       },
     });
+  }
+
+  // JS配信
+  if (url.pathname.startsWith("/js/")) {
+    try {
+      const filePath = new URL(`./public${url.pathname}`, import.meta.url);
+      const js = await Deno.readTextFile(filePath);
+      return new Response(js, {
+        headers: { "Content-Type": "application/javascript; charset=utf-8" },
+      });
+    } catch {
+      return new Response("Not Found", { status: 404 });
+    }
   }
 
   // index.html配信

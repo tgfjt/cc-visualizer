@@ -242,25 +242,30 @@ export function getSnapshot(): { sessions: ReturnType<typeof getSessions> } {
   };
 }
 
-// 後方互換性のため（テスト用）
-export function getActiveAgents() {
-  const agents: Array<{ id: string; sessionId: string; type: string; status: string; currentTool?: string }> = [];
-  for (const session of sessions.values()) {
-    for (const sub of session.subAgents.values()) {
-      agents.push({
-        id: sub.id,
-        sessionId: session.id,
-        type: sub.type,
-        status: sub.status,
-        currentTool: sub.currentAction,
-      });
-    }
-  }
-  return agents.filter((a) => a.status === "active");
+/**
+ * セッションをすべてクリア（テスト用）
+ */
+export function clearSessions(): void {
+  sessions.clear();
 }
 
-export function getAllAgents() {
-  const agents: Array<{ id: string; sessionId: string; type: string; status: string; currentTool?: string }> = [];
+/**
+ * 全エージェントを取得
+ */
+export function getAllAgents(): Array<{
+  id: string;
+  sessionId: string;
+  type: string;
+  status: string;
+  currentAction?: string;
+}> {
+  const agents: Array<{
+    id: string;
+    sessionId: string;
+    type: string;
+    status: string;
+    currentAction?: string;
+  }> = [];
   for (const session of sessions.values()) {
     for (const sub of session.subAgents.values()) {
       agents.push({
@@ -268,9 +273,16 @@ export function getAllAgents() {
         sessionId: session.id,
         type: sub.type,
         status: sub.status,
-        currentTool: sub.currentAction,
+        currentAction: sub.currentAction,
       });
     }
   }
   return agents;
+}
+
+/**
+ * アクティブなエージェントのみ取得
+ */
+export function getActiveAgents(): ReturnType<typeof getAllAgents> {
+  return getAllAgents().filter((a) => a.status === "active");
 }
