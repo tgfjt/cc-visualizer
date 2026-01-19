@@ -3,7 +3,5 @@
     "allow": ["Bash(rg:*)", "Bash(fd:*)", "Bash(gh:*)"],
     "deny": []
   },
-  "enabledPlugins": {
-    "commit-commands@claude-code-plugins": true
-  }
+  "enabledPlugins": {}
 }
