@@ -60,7 +60,6 @@ export function renderSessions() {
             ${
               conversations.length > 0
                 ? conversations
-                    .slice(-8)
                     .map((c) => {
                       const time = formatTime(c.time);
                       const isFromMain = c.from === "main";

@@ -75,7 +75,7 @@ test.describe("サブエージェント表示", () => {
     const reply = messages.nth(1);
     await expect(reply).toHaveClass(/reply/);
     await expect(reply.locator(".sender.sub")).toContainText("Explore");
-    await expect(reply.locator(".text")).toContainText("完了");
+    await expect(reply.locator(".text")).toContainText("調査開始");
   });
 
   test("複数のサブエージェントのやりとりが表示される", async ({ page }) => {

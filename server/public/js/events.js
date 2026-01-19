@@ -59,6 +59,8 @@ export function handleSpeechUpdate(data) {
       if (session.speechHistory.length > CONFIG.MAX_SPEECH_HISTORY) {
         session.speechHistory.pop();
       }
+      // 会話にもメインの発話を追加
+      addConversation(session, "main", null, `💬 ${data.speech}`);
     }
     session.lastSeen = Date.now();
   }
@@ -107,16 +109,20 @@ export function handleEvent(event) {
     case "SubagentStart":
       if (event.agent_id) {
         let sub = session.subAgents.find((s) => s.id === event.agent_id);
+        // 保存しておいた description を取得
+        const taskDesc = session.pendingTaskDescriptions?.shift();
         if (!sub) {
           sub = {
             id: event.agent_id,
             type: event.agent_type || "unknown",
             status: "active",
+            taskDescription: taskDesc,
           };
           session.subAgents.push(sub);
         } else {
           sub.status = "active";
           sub.type = event.agent_type || sub.type;
+          sub.taskDescription = taskDesc || sub.taskDescription;
         }
       }
       break;
@@ -125,7 +131,10 @@ export function handleEvent(event) {
       if (event.agent_id) {
         const sub = session.subAgents.find((s) => s.id === event.agent_id);
         if (sub) {
-          addConversation(session, sub.type, "main", "完了");
+          const doneMsg = sub.taskDescription
+            ? `✅ ${sub.taskDescription}`
+            : "完了";
+          addConversation(session, sub.type, "main", doneMsg);
           sub.status = "inactive";
           sub.currentAction = null;
         }
@@ -150,6 +159,11 @@ export function handleEvent(event) {
           const subType = event.tool_input.subagent_type || "サブ";
           const desc = event.tool_input.description || "作業依頼";
           addConversation(session, "main", subType, desc);
+          // 次の SubagentStart 用に description を保存
+          if (!session.pendingTaskDescriptions) {
+            session.pendingTaskDescriptions = [];
+          }
+          session.pendingTaskDescriptions.push(desc);
         } else if (toolName && action) {
           const toolIcon = getToolIcon(toolName);
           addConversation(session, "main", null, `${toolIcon} ${action}`);
